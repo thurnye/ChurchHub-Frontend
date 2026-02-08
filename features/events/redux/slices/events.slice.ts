@@ -35,12 +35,13 @@ const eventsSlice = createSlice({
     builder
       .addCase(fetchEvents.pending, (state) => { state.status = 'loading'; })
       .addCase(fetchEvents.fulfilled, (state, action) => {
-        state.items = action.payload;
+        state.items = Array.isArray(action.payload) ? action.payload : [];
         state.status = 'succeeded';
         state.lastFetchedAt = Date.now();
       })
       .addCase(fetchEvents.rejected, (state, action) => {
         state.status = 'failed';
+        state.items = [];
         state.error = action.error.message ?? 'Failed to load events.';
       });
   },

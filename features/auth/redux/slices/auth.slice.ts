@@ -9,6 +9,23 @@ import type {
   ResetPasswordRequest,
 } from '../../types/auth.types';
 
+// Helper to extract error message from API response
+function extractErrorMessage(error: any, fallback: string): string {
+  // Backend format: { success: false, error: { message: "..." } }
+  if (error?.response?.data?.error?.message) {
+    return error.response.data.error.message;
+  }
+  // Alternative format: { message: "..." }
+  if (error?.response?.data?.message) {
+    return error.response.data.message;
+  }
+  // Error message
+  if (error?.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 const initialState: AuthState = {
   user: null,
   isAuthenticated: false,
@@ -27,7 +44,7 @@ export const loginUser = createAsyncThunk(
       await tokenManager.setRefreshToken(response.refreshToken);
       return response.user;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Login failed');
+      return rejectWithValue(extractErrorMessage(error, 'Login failed'));
     }
   },
 );
@@ -43,7 +60,7 @@ export const signupUser = createAsyncThunk(
       await tokenManager.setRefreshToken(response.refreshToken);
       return response.user;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Signup failed');
+      return rejectWithValue(extractErrorMessage(error, 'Signup failed'));
     }
   },
 );
@@ -58,7 +75,7 @@ export const logoutUser = createAsyncThunk(
     } catch (error: any) {
       // Clear tokens even if API call fails
       await tokenManager.clear();
-      return rejectWithValue(error.response?.data?.message || 'Logout failed');
+      return rejectWithValue(extractErrorMessage(error, 'Logout failed'));
     }
   },
 );
@@ -72,7 +89,7 @@ export const fetchCurrentUser = createAsyncThunk(
       return user;
     } catch (error: any) {
       await tokenManager.clear();
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch user');
+      return rejectWithValue(extractErrorMessage(error, 'Failed to fetch user'));
     }
   },
 );
@@ -85,7 +102,7 @@ export const forgotPassword = createAsyncThunk(
       const response = await authRepo.forgotPassword(request);
       return response.message;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send reset email');
+      return rejectWithValue(extractErrorMessage(error, 'Failed to send reset email'));
     }
   },
 );
@@ -98,7 +115,7 @@ export const resetPassword = createAsyncThunk(
       const response = await authRepo.resetPassword(request);
       return response.message;
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to reset password');
+      return rejectWithValue(extractErrorMessage(error, 'Failed to reset password'));
     }
   },
 );

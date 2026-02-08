@@ -2,32 +2,44 @@ import { View, Text, Pressable, TextInput, ActivityIndicator, ScrollView } from 
 import { router } from "expo-router";
 import { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, User } from "lucide-react-native";
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, User, Hash } from "lucide-react-native";
 
 import { Button } from "@/shared/components/ui";
 import { useAuth } from "@/shared/context/AuthContext";
 
 export function SignupScreen() {
   const insets = useSafeAreaInsets();
-  const { login, isLoading } = useAuth();
+  const { signup, isLoading } = useAuth();
 
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   const handleSignup = async () => {
     setError("");
 
-    if (!name.trim()) {
-      setError("Please enter your name");
+    if (!firstName.trim()) {
+      setError("Please enter your first name");
+      return;
+    }
+
+    if (!lastName.trim()) {
+      setError("Please enter your last name");
       return;
     }
 
     if (!email.trim()) {
       setError("Please enter your email");
+      return;
+    }
+
+    if (!joinCode.trim()) {
+      setError("Please enter your church's join code");
       return;
     }
 
@@ -47,10 +59,15 @@ export function SignupScreen() {
     }
 
     try {
-      // Simulate signup by logging in
-      await login(email, password);
-    } catch (err) {
-      setError("Could not create account");
+      await signup({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        password,
+        joinCode: joinCode.trim().toUpperCase(),
+      });
+    } catch (err: any) {
+      setError(err?.message || "Could not create account");
     }
   };
 
@@ -74,15 +91,29 @@ export function SignupScreen() {
         </Text>
 
         <View className="gap-4">
-          {/* Name Input */}
+          {/* First Name Input */}
           <View className="flex-row items-center bg-gray-100 rounded-lg px-4 py-3">
             <User size={20} color="#6b7280" />
             <TextInput
               className="flex-1 ml-3 text-gray-900"
-              placeholder="Full name"
+              placeholder="First name"
               placeholderTextColor="#9ca3af"
-              value={name}
-              onChangeText={setName}
+              value={firstName}
+              onChangeText={setFirstName}
+              autoCapitalize="words"
+              editable={!isLoading}
+            />
+          </View>
+
+          {/* Last Name Input */}
+          <View className="flex-row items-center bg-gray-100 rounded-lg px-4 py-3">
+            <User size={20} color="#6b7280" />
+            <TextInput
+              className="flex-1 ml-3 text-gray-900"
+              placeholder="Last name"
+              placeholderTextColor="#9ca3af"
+              value={lastName}
+              onChangeText={setLastName}
               autoCapitalize="words"
               editable={!isLoading}
             />
@@ -99,6 +130,21 @@ export function SignupScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
+          </View>
+
+          {/* Join Code Input */}
+          <View className="flex-row items-center bg-gray-100 rounded-lg px-4 py-3">
+            <Hash size={20} color="#6b7280" />
+            <TextInput
+              className="flex-1 ml-3 text-gray-900"
+              placeholder="Church join code (e.g., GRACE2024)"
+              placeholderTextColor="#9ca3af"
+              value={joinCode}
+              onChangeText={(text) => setJoinCode(text.toUpperCase())}
+              autoCapitalize="characters"
               autoCorrect={false}
               editable={!isLoading}
             />

@@ -15,11 +15,17 @@ function delay<T>(value: T, ms = 500): Promise<T> {
 
 // Mock user for testing
 const mockUser: User = {
-  id: '1',
-  name: 'John Doe',
+  _id: '1',
+  firstName: 'John',
+  lastName: 'Doe',
   email: 'john@example.com',
   avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+  role: 'member',
+  status: 'active',
+  emailVerified: true,
+  phoneVerified: false,
   createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
 };
 
 const mockAuthResponse: AuthResponse = {
@@ -42,10 +48,15 @@ export async function signup(credentials: SignupCredentials): Promise<AuthRespon
   if (DATA_SOURCE === 'api') return authApi.signup(credentials);
 
   // Mock validation
-  if (credentials.email && credentials.password && credentials.name) {
+  if (credentials.email && credentials.password && credentials.firstName) {
     return delay({
       ...mockAuthResponse,
-      user: { ...mockUser, name: credentials.name, email: credentials.email },
+      user: {
+        ...mockUser,
+        firstName: credentials.firstName,
+        lastName: credentials.lastName,
+        email: credentials.email
+      },
     });
   }
   throw new Error('Invalid signup data');

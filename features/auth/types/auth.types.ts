@@ -1,10 +1,18 @@
 export interface User {
-  id: string;
-  name: string;
+  _id: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  avatar?: string;
   phone?: string;
+  avatar?: string;
+  tenantId?: string;
+  role: 'super_admin' | 'church_admin' | 'clergy' | 'leader' | 'member';
+  status: 'active' | 'inactive' | 'suspended' | 'pending_verification';
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  lastLoginAt?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface LoginCredentials {
@@ -13,10 +21,12 @@ export interface LoginCredentials {
 }
 
 export interface SignupCredentials {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   phone?: string;
+  joinCode: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -39,4 +49,10 @@ export interface AuthState {
   isAuthenticated: boolean;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
+}
+
+// Helper to get display name
+export function getUserDisplayName(user: User | null): string {
+  if (!user) return '';
+  return `${user.firstName} ${user.lastName}`.trim();
 }

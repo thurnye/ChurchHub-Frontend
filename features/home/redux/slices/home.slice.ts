@@ -23,12 +23,21 @@ export const fetchHomeItems = createAsyncThunk(
   },
 );
 
+// Force refresh - bypasses cache
+export const refreshHomeItems = createAsyncThunk(
+  'home/refresh',
+  async () => homeRepo.getAll(),
+);
+
 const homeSlice = createSlice({
   name: 'home',
   initialState,
   reducers: {
     setSelected(state, action: PayloadAction<HomeItem | null>) {
       state.selected = action.payload;
+    },
+    clearCache(state) {
+      state.lastFetchedAt = 0;
     },
   },
   extraReducers: (builder) => {
@@ -42,9 +51,20 @@ const homeSlice = createSlice({
       .addCase(fetchHomeItems.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.error.message ?? 'Failed to load home items.';
+      })
+      // Refresh actions
+      .addCase(refreshHomeItems.pending, (state) => { state.status = 'loading'; })
+      .addCase(refreshHomeItems.fulfilled, (state, action) => {
+        state.items = action.payload;
+        state.status = 'succeeded';
+        state.lastFetchedAt = Date.now();
+      })
+      .addCase(refreshHomeItems.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.error.message ?? 'Failed to refresh home items.';
       });
   },
 });
 
-export const { setSelected } = homeSlice.actions;
+export const { setSelected, clearCache } = homeSlice.actions;
 export default homeSlice.reducer;

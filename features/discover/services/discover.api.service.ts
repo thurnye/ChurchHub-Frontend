@@ -4,7 +4,7 @@ import type { DiscoverItem } from '../types/discover.types';
 
 export async function fetchDiscoverItems(): Promise<DiscoverItem[]> {
   const { data } = await apiClient.get<PaginatedResponse<DiscoverItem>>('/discover/churches');
-  return data.data;
+  return data.data ?? [];
 }
 
 export async function fetchDiscoverItemById(id: string): Promise<DiscoverItem> {

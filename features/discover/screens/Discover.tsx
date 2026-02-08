@@ -39,14 +39,15 @@ export function Discover({  }: DiscoverProps) {
     }
   }, [searchQuery]);
 
+  const safeChurches = churches ?? [];
   const filteredChurches = selectedDenomination
-    ? churches.filter((c) => c.denomination === selectedDenomination)
-    : churches;
+    ? safeChurches.filter((c) => c.denomination === selectedDenomination)
+    : safeChurches;
 
   // Calculate initial region based on churches
   const initialRegion = {
-    latitude: churches[0]?.lat || 40.7128,
-    longitude: churches[0]?.lng || -74.006,
+    latitude: safeChurches[0]?.lat || 40.7128,
+    longitude: safeChurches[0]?.lng || -74.006,
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   };
@@ -75,7 +76,7 @@ export function Discover({  }: DiscoverProps) {
 
   const handleMarkerPress = (churchId: string) => {
     setSelectedChurchId(churchId);
-    const church = churches.find((c) => c.id === churchId);
+    const church = safeChurches.find((c) => c.id === churchId);
     if (church && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: church.lat,

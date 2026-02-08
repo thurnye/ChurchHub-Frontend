@@ -1,12 +1,59 @@
-import type { ISermon } from '@/data/mockData';
+// Backend Sermon entity types
 
-// Re-export the mock interface as the canonical item type.
-// When a backend schema is defined, replace this with the API-driven shape.
-export type SermonItem = ISermon;
+export interface SermonItem {
+  _id: string;
+  id?: string; // Alias for _id
+  tenantId: string;
+  title: string;
+  speaker: string;
+  date: string;
+  description?: string;
+  notes?: string;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
+  tags: string[];
+  scriptureReferences: string[];
+  duration?: number; // in seconds
+  isPublished: boolean;
+  publishedAt?: string;
+  viewCount: number;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSermonDto {
+  title: string;
+  speaker: string;
+  date: string;
+  description?: string;
+  notes?: string;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
+  tags?: string[];
+  scriptureReferences?: string[];
+  duration?: number;
+  isPublished?: boolean;
+}
+
+export interface UpdateSermonDto extends Partial<CreateSermonDto> {}
+
+export interface SermonQueryParams {
+  page?: number;
+  limit?: number;
+  speaker?: string;
+  tag?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  isPublished?: boolean;
+}
 
 export interface SermonsState {
   items: SermonItem[];
   selected: SermonItem | null;
+  speakers: string[];
+  tags: string[];
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetchedAt: number;

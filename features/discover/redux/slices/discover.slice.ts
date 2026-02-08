@@ -35,12 +35,13 @@ const discoverSlice = createSlice({
     builder
       .addCase(fetchDiscoverItems.pending, (state) => { state.status = 'loading'; })
       .addCase(fetchDiscoverItems.fulfilled, (state, action) => {
-        state.items = action.payload;
+        state.items = Array.isArray(action.payload) ? action.payload : [];
         state.status = 'succeeded';
         state.lastFetchedAt = Date.now();
       })
       .addCase(fetchDiscoverItems.rejected, (state, action) => {
         state.status = 'failed';
+        state.items = [];
         state.error = action.error.message ?? 'Failed to load discover items.';
       });
   },

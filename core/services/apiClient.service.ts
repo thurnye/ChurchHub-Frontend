@@ -5,7 +5,10 @@ import { tokenManager } from '../utils/tokenManager.utils';
 // ─── Base URL ───────────────────────────────────────────────
 
 const BASE_URL =
-  (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
+  (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) || 'http://localhost:3000/api/v1';
+
+// Debug: Log the base URL on load
+console.log('[apiClient] BASE_URL:', BASE_URL);
 
 // ─── Axios Instance ─────────────────────────────────────────
 
@@ -22,6 +25,9 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = tokenManager.getAccessToken();
+
+    console.log('[apiClient] Request:', config.method?.toUpperCase(), config.url);
+    console.log('[apiClient] Token present:', !!token);
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -50,14 +56,26 @@ const processQueue = (error: unknown, token: string | null) => {
 
 // ─── Response interceptor – handle 401 + refresh ───────────
 
+// Endpoints that should NOT trigger token refresh (to prevent infinite loops)
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('[apiClient] Response:', response.status, response.config.url);
+    return response;
+  },
   async (error: AxiosError) => {
+    console.log('[apiClient] Error:', error.response?.status, error.config?.url, error.message);
     const originalRequest = error.config as any;
+    const requestUrl = originalRequest?.url || '';
+
+    // Skip refresh logic for auth endpoints to prevent infinite loops
+    const isAuthEndpoint = AUTH_ENDPOINTS.some(endpoint => requestUrl.includes(endpoint));
 
     if (
       error.response?.status === 401 &&
-      !originalRequest?._retry
+      !originalRequest?._retry &&
+      !isAuthEndpoint
     ) {
       originalRequest._retry = true;
 
@@ -77,20 +95,26 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await tokenManager.getRefreshToken();
+        const storedRefreshToken = await tokenManager.getRefreshToken();
 
-        if (!refreshToken) {
+        if (!storedRefreshToken) {
           throw new Error('No refresh token');
         }
 
         const { data } = await axios.post(
           `${BASE_URL}/auth/refresh`,
-          { refreshToken }
+          { refreshToken: storedRefreshToken }
         );
 
-        const newAccessToken = data.accessToken;
+        // Backend wraps response in { success: true, data: { accessToken, refreshToken } }
+        const responseData = data.data || data;
+        const newAccessToken = responseData.accessToken;
+        const newRefreshToken = responseData.refreshToken;
 
         tokenManager.setAccessToken(newAccessToken);
+        if (newRefreshToken) {
+          await tokenManager.setRefreshToken(newRefreshToken);
+        }
         processQueue(null, newAccessToken);
 
         originalRequest.headers.Authorization =

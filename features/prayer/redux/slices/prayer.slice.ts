@@ -35,12 +35,13 @@ const prayerSlice = createSlice({
     builder
       .addCase(fetchPrayerItems.pending, (state) => { state.status = 'loading'; })
       .addCase(fetchPrayerItems.fulfilled, (state, action) => {
-        state.items = action.payload;
+        state.items = Array.isArray(action.payload) ? action.payload : [];
         state.status = 'succeeded';
         state.lastFetchedAt = Date.now();
       })
       .addCase(fetchPrayerItems.rejected, (state, action) => {
         state.status = 'failed';
+        state.items = [];
         state.error = action.error.message ?? 'Failed to load prayer items.';
       });
   },

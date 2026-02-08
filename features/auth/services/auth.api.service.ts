@@ -1,5 +1,6 @@
+import axios from 'axios';
+import Constants from 'expo-constants';
 import apiClient from '@/core/services/apiClient.service';
-import type { ApiResponse } from '@/core/types/api.types';
 import type {
   LoginCredentials,
   SignupCredentials,
@@ -9,13 +10,25 @@ import type {
   User,
 } from '../types/auth.types';
 
+const BASE_URL =
+  (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ?? '';
+
+// Backend wraps responses in { success: true, data: T }
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  statusCode: number;
+  timestamp: string;
+  path: string;
+}
+
 export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
   const { data } = await apiClient.post<ApiResponse<AuthResponse>>('/auth/login', credentials);
   return data.data;
 }
 
 export async function signup(credentials: SignupCredentials): Promise<AuthResponse> {
-  const { data } = await apiClient.post<ApiResponse<AuthResponse>>('/auth/signup', credentials);
+  const { data } = await apiClient.post<ApiResponse<AuthResponse>>('/auth/register', credentials);
   return data.data;
 }
 
@@ -38,7 +51,11 @@ export async function getCurrentUser(): Promise<User> {
   return data.data;
 }
 
-export async function refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
-  const { data } = await apiClient.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', { refreshToken });
+export async function refreshToken(token: string): Promise<{ accessToken: string; refreshToken: string }> {
+  // Use plain axios to avoid interceptor loops
+  const { data } = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
+    `${BASE_URL}/auth/refresh`,
+    { refreshToken: token }
+  );
   return data.data;
 }

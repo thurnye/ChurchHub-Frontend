@@ -8,6 +8,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Text,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -26,7 +27,7 @@ import {
   QuickActionsModal,
 } from '../components';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks/app.hooks';
-import { fetchHomeItems } from '../redux/slices/home.slice';
+import { fetchHomeItems, refreshHomeItems } from '../redux/slices/home.slice';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const STORIES_HEIGHT = 120;
@@ -50,10 +51,23 @@ export function HomeScreen() {
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [currentVisibleIndex, setCurrentVisibleIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Fetch home items on mount
   useEffect(() => {
     dispatch(fetchHomeItems());
+  }, [dispatch]);
+
+  // Handle pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await dispatch(refreshHomeItems()).unwrap();
+    } catch (error) {
+      console.log('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [dispatch]);
 
   // Track screen focus
@@ -65,6 +79,7 @@ export function HomeScreen() {
       };
     }, [])
   );
+
 
   const flatListRef = useRef<FlatList>(null);
   const swipeX = useRef(new Animated.Value(0)).current;
@@ -362,6 +377,15 @@ export function HomeScreen() {
         maxToRenderPerBatch={3}
         windowSize={3}
         initialNumToRender={2}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor="#ffffff"
+            colors={['#ffffff']}
+            progressBackgroundColor="#000000"
+          />
+        }
       />
 
       {/* Transparent Stories Row Overlay */}

@@ -10,9 +10,8 @@ import { useAuth } from "@/shared/context/AuthContext";
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { login, isLoading } = useAuth();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("jane.smith@stmarys.org");
+  const [password, setPassword] = useState("Password123!");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,9 +29,9 @@ export function LoginScreen() {
     }
 
     try {
-      await login(email, password);
-    } catch (err) {
-      setError("Invalid email or password");
+      await login(email.trim(), password);
+    } catch (err: any) {
+      setError(err?.message || "Invalid email or password");
     }
   };
 
