@@ -20,17 +20,22 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
-// ─── Request interceptor – attach access token ─────────────
+// ─── Request interceptor – attach access token and tenant ID ─────────────
 
 apiClient.interceptors.request.use(
   (config) => {
     const token = tokenManager.getAccessToken();
+    const tenantId = tokenManager.getTenantId();
 
     console.log('[apiClient] Request:', config.method?.toUpperCase(), config.url);
-    console.log('[apiClient] Token present:', !!token);
+    console.log('[apiClient] Token present:', !!token, 'TenantId:', tenantId);
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    if (tenantId) {
+      config.headers['x-tenant-id'] = tenantId;
     }
 
     return config;

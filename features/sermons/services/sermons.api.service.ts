@@ -1,10 +1,23 @@
 import apiClient from '@/core/services/apiClient.service';
 import type { SermonItem, SermonQueryParams } from '../types/sermon.types';
 
-interface ApiResponse<T> {
+// Backend wraps responses with { success: true, data: <payload>, ... }
+// The sermons controller returns { success, data: [...], meta: {...} }
+// Then TransformInterceptor wraps it again, so final response is:
+// { success, data: { success, data: [...], meta }, statusCode, ... }
+
+interface ApiWrapper<T> {
   success: boolean;
   data: T;
-  meta?: {
+  statusCode?: number;
+  timestamp?: string;
+  path?: string;
+}
+
+interface SermonsResponse {
+  success: boolean;
+  data: SermonItem[];
+  meta: {
     total: number;
     page: number;
     limit: number;
@@ -12,30 +25,49 @@ interface ApiResponse<T> {
   };
 }
 
-export async function fetchSermons(params: SermonQueryParams = {}): Promise<SermonItem[]> {
-  const { data } = await apiClient.get<ApiResponse<SermonItem[]>>('/sermons', { params });
-  return data.data;
+export interface FetchSermonsResult {
+  items: SermonItem[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export async function fetchSermons(params: SermonQueryParams = {}): Promise<FetchSermonsResult> {
+  const { data: response } = await apiClient.get<ApiWrapper<SermonsResponse>>('/sermons', { params });
+  // response.data is { success, data: [...sermons], meta }
+  const innerData = response.data;
+  return {
+    items: innerData?.data ?? [],
+    meta: innerData?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 },
+  };
 }
 
 export async function fetchSermonById(id: string): Promise<SermonItem> {
-  const { data } = await apiClient.get<ApiResponse<SermonItem>>(`/sermons/${id}`);
-  return data.data;
+  const { data: response } = await apiClient.get<ApiWrapper<{ success: boolean; data: SermonItem }>>(`/sermons/${id}`);
+  // response.data is { success, data: sermon }
+  return response.data?.data ?? response.data;
 }
 
-export async function searchSermons(query: string): Promise<SermonItem[]> {
-  // Backend uses query params for filtering, not a separate search endpoint
-  const { data } = await apiClient.get<ApiResponse<SermonItem[]>>('/sermons', {
+export async function searchSermons(query: string): Promise<FetchSermonsResult> {
+  const { data: response } = await apiClient.get<ApiWrapper<SermonsResponse>>('/sermons', {
     params: { search: query },
   });
-  return data.data;
+  const innerData = response.data;
+  return {
+    items: innerData?.data ?? [],
+    meta: innerData?.meta ?? { total: 0, page: 1, limit: 20, totalPages: 1 },
+  };
 }
 
 export async function fetchSpeakers(): Promise<string[]> {
-  const { data } = await apiClient.get<ApiResponse<string[]>>('/sermons/speakers');
-  return data.data;
+  const { data: response } = await apiClient.get<ApiWrapper<{ success: boolean; data: string[] }>>('/sermons/speakers');
+  return response.data?.data ?? [];
 }
 
 export async function fetchTags(): Promise<string[]> {
-  const { data } = await apiClient.get<ApiResponse<string[]>>('/sermons/tags');
-  return data.data;
+  const { data: response } = await apiClient.get<ApiWrapper<{ success: boolean; data: string[] }>>('/sermons/tags');
+  return response.data?.data ?? [];
 }

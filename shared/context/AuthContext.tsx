@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkAuthStatus = async () => {
       try {
         const storedRefreshToken = await tokenManager.getRefreshToken();
+        // Load tenant ID from storage
+        await tokenManager.loadTenantId();
 
         if (!storedRefreshToken) {
           // No stored token, user needs to login
@@ -93,6 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenManager.setAccessToken(response.accessToken);
       await tokenManager.setRefreshToken(response.refreshToken);
 
+      // Store tenant ID for API requests
+      if (response.user?.tenantId) {
+        await tokenManager.saveTenantId(response.user.tenantId);
+      }
+
       // Update state
       setUser(response.user);
       setIsAuthenticated(true);
@@ -118,6 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Store tokens
       tokenManager.setAccessToken(response.accessToken);
       await tokenManager.setRefreshToken(response.refreshToken);
+
+      // Store tenant ID for API requests
+      if (response.user?.tenantId) {
+        await tokenManager.saveTenantId(response.user.tenantId);
+      }
 
       // Update state
       setUser(response.user);

@@ -15,6 +15,7 @@ export interface SermonItem {
   scriptureReferences: string[];
   duration?: number; // in seconds
   isPublished: boolean;
+  isLive?: boolean; // Whether the sermon is currently live streaming
   publishedAt?: string;
   viewCount: number;
   createdBy?: string;
@@ -52,9 +53,15 @@ export interface SermonQueryParams {
 export interface SermonsState {
   items: SermonItem[];
   selected: SermonItem | null;
+  selectedStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   speakers: string[];
   tags: string[];
+  selectedTag: string | null;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   error: string | null;
   lastFetchedAt: number;
+  // Pagination
+  page: number;
+  hasMore: boolean;
+  loadingMore: boolean;
 }

@@ -1,11 +1,5 @@
-// SermonDetailScreen.tsx (React Native + NativeWind)
-// ✅ No Button/Badge components — uses Pressable + simple badge
-// ✅ lucide-react-native icons
-// ✅ Same layout: header image + LIVE badge + overlay play, info blocks, notes, related, fixed bottom actions
-
-import React, { useMemo, useEffect } from 'react';
+import { useCallback } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   Pressable,
@@ -14,7 +8,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import {
-  ArrowLeft,
   Play,
   Share2,
   Bookmark,
@@ -24,9 +17,9 @@ import {
   Tag,
 } from 'lucide-react-native';
 import { HiddenScreensTopBar } from '@/shared/components/HiddenScreensTopBar';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useAppSelector, useAppDispatch } from '@/shared/hooks/app.hooks';
-import { fetchSermons } from '../redux/slices/sermons.slice';
+import { fetchSermonById, clearSelected } from '../redux/slices/sermons.slice';
 
 interface SermonDetailScreenProps {
   onPlayMedia?: (sermonId: string) => void;
@@ -75,30 +68,61 @@ function IconButton({
 
 export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
   const dispatch = useAppDispatch();
-  const { items: sermons, status } = useAppSelector((state) => state.sermons);
+  const { selected: sermon, selectedStatus, items: sermons } = useAppSelector(
+    (state) => state.sermons,
+  );
   const { sermonId, from } = useLocalSearchParams<{
     sermonId: string;
     from: string;
   }>();
 
-  useEffect(() => {
-    dispatch(fetchSermons());
-  }, [dispatch]);
+  // Fetch sermon when screen gains focus (including when returning from media player)
+  useFocusEffect(
+    useCallback(() => {
+      if (sermonId) {
+        dispatch(fetchSermonById(sermonId));
+      }
 
-  const sermon = useMemo(
-    () => sermons.find((s) => s.id === sermonId) || sermons[0],
-    [sermons, sermonId],
+      // Only clear when navigating away from this screen entirely
+      return () => {
+        // Don't clear here - let the data persist for media player
+      };
+    }, [dispatch, sermonId]),
   );
 
-  const related = useMemo(
-    () =>
-      sermons
-        .filter((s) => s.id !== sermon?.id && s.speaker === sermon?.speaker)
-        .slice(0, 2),
-    [sermons, sermon?.id, sermon?.speaker],
-  );
+  // Get related sermons from the same speaker
+  const related = sermons
+    .filter((s) => s._id !== sermon?._id && s.speaker === sermon?.speaker)
+    .slice(0, 2);
 
-  if (status === 'loading' || !sermon) {
+  // Format duration from seconds to readable format
+  const formatDuration = useCallback((seconds?: number) => {
+    if (!seconds) return '';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  // Format date
+  const formatDate = useCallback((dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  }, []);
+
+  if (selectedStatus === 'loading' || !sermon) {
     return (
       <View className='flex-1 bg-gray-50'>
         <HiddenScreensTopBar show={true} title='Loading...' navigateTo={from} />
@@ -110,6 +134,21 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
     );
   }
 
+  if (selectedStatus === 'failed') {
+    return (
+      <View className='flex-1 bg-gray-50'>
+        <HiddenScreensTopBar show={true} title='Error' navigateTo={from} />
+        <View className='flex-1 items-center justify-center px-4'>
+          <Text className='text-gray-600 text-center'>
+            Failed to load sermon. Please try again.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const primaryTag = sermon.tags?.[0] || 'General';
+
   return (
     <View className='flex-1 bg-gray-50'>
       <HiddenScreensTopBar show={true} title={sermon.title} navigateTo={from} />
@@ -119,7 +158,7 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
             {/* Header with thumbnail */}
             <View className='relative'>
               <Image
-                source={{ uri: sermon.thumbnail }}
+                source={{ uri: sermon.thumbnailUrl }}
                 resizeMode='cover'
                 className='w-full h-56'
               />
@@ -138,12 +177,11 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
                     router.push({
                       pathname: '/media-player/[id]',
                       params: {
-                        id: sermon.id,
-                        from: `sermons/sermon.id`,
+                        id: sermon._id,
+                        from: `sermons/${sermon._id}`,
                       },
                     })
                   }
-                  // onPress={() => onPlayMedia?.(sermon.id)}
                   className='h-16 w-16 rounded-full bg-white/90 items-center justify-center'
                 >
                   <Play size={32} color='#4f46e5' />
@@ -154,7 +192,7 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
             {/* Content */}
             <View className='bg-white -mt-6 rounded-t-3xl px-4 pt-6 pb-6'>
               <Text className='text-2xl font-bold text-gray-900 mb-4'>
-                {sermon.title}123
+                {sermon.title}
               </Text>
 
               {/* Sermon Info */}
@@ -169,82 +207,101 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
                 <View className='flex-row items-center flex-wrap'>
                   <View className='flex-row items-center gap-2'>
                     <Calendar size={16} color='#6b7280' />
-                    <Text className='text-sm text-gray-700'>{sermon.date}</Text>
-                  </View>
-
-                  <Text className='text-sm text-gray-400 mx-2'>•</Text>
-
-                  <View className='flex-row items-center gap-2'>
-                    <Clock size={16} color='#6b7280' />
                     <Text className='text-sm text-gray-700'>
-                      {sermon.duration}
+                      {formatDate(sermon.date)}
                     </Text>
                   </View>
+
+                  {sermon.duration && (
+                    <>
+                      <Text className='text-sm text-gray-400 mx-2'>•</Text>
+                      <View className='flex-row items-center gap-2'>
+                        <Clock size={16} color='#6b7280' />
+                        <Text className='text-sm text-gray-700'>
+                          {formatDuration(sermon.duration)}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
-                <View className='flex-row items-center gap-2'>
-                  <Tag size={16} color='#6b7280' />
-                  <BadgePill text={sermon.topic} />
-                </View>
+                {sermon.tags && sermon.tags.length > 0 && (
+                  <View className='flex-row items-center gap-2 flex-wrap'>
+                    <Tag size={16} color='#6b7280' />
+                    {sermon.tags.map((tag) => (
+                      <BadgePill key={tag} text={tag} />
+                    ))}
+                  </View>
+                )}
               </View>
 
-              {/* Church */}
-              <View className='mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200'>
-                <Text className='text-sm text-gray-500 mb-1'>Church</Text>
-                <Text className='font-medium text-gray-900'>
-                  {sermon.church}
-                </Text>
-              </View>
+              {/* View Count */}
+              {sermon.viewCount > 0 && (
+                <View className='mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200'>
+                  <Text className='text-sm text-gray-500 mb-1'>Views</Text>
+                  <Text className='font-medium text-gray-900'>
+                    {sermon.viewCount.toLocaleString()}
+                  </Text>
+                </View>
+              )}
 
               {/* Scripture References */}
-              <View className='mb-6'>
-                <Text className='font-semibold text-gray-900 mb-3'>
-                  Scripture References
-                </Text>
-                <View className='gap-2'>
-                  {['Romans 12:1-2', 'Matthew 6:33'].map((ref) => (
-                    <View
-                      key={ref}
-                      className='p-3 bg-indigo-50 rounded-2xl border border-indigo-100'
-                    >
-                      <Text className='text-sm font-medium text-indigo-900'>
-                        {ref}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              {/* Sermon Notes */}
-              <View className='mb-6'>
-                <Text className='font-semibold text-gray-900 mb-3'>
-                  Sermon Notes
-                </Text>
-                <View className='p-4 bg-gray-50 rounded-2xl border border-gray-200'>
-                  <Text className='text-sm text-gray-700 leading-relaxed mb-3'>
-                    In this powerful message, {sermon.speaker} explores the
-                    theme of {String(sermon.topic).toLowerCase()} and how it
-                    applies to our daily walk with God.
+              {sermon.scriptureReferences && sermon.scriptureReferences.length > 0 && (
+                <View className='mb-6'>
+                  <Text className='font-semibold text-gray-900 mb-3'>
+                    Scripture References
                   </Text>
-
-                  <Text className='text-sm text-gray-700 leading-relaxed'>
-                    Key takeaways:
-                  </Text>
-
-                  <View className='mt-2 gap-2'>
-                    {[
-                      "Trust in God's timing and provision",
-                      'Walking by faith, not by sight',
-                      'Building our foundation on Christ',
-                    ].map((t) => (
-                      <View key={t} className='flex-row items-start gap-2'>
-                        <Text className='text-indigo-600 mt-0.5'>•</Text>
-                        <Text className='text-sm text-gray-700 flex-1'>
-                          {t}
+                  <View className='gap-2'>
+                    {sermon.scriptureReferences.map((ref) => (
+                      <View
+                        key={ref}
+                        className='p-3 bg-indigo-50 rounded-2xl border border-indigo-100'
+                      >
+                        <Text className='text-sm font-medium text-indigo-900'>
+                          {ref}
                         </Text>
                       </View>
                     ))}
                   </View>
+                </View>
+              )}
+
+              {/* Sermon Notes / Description */}
+              <View className='mb-6'>
+                <Text className='font-semibold text-gray-900 mb-3'>
+                  {sermon.notes ? 'Sermon Notes' : 'About This Sermon'}
+                </Text>
+                <View className='p-4 bg-gray-50 rounded-2xl border border-gray-200'>
+                  {sermon.notes || sermon.description ? (
+                    <Text className='text-sm text-gray-700 leading-relaxed'>
+                      {sermon.notes || sermon.description}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text className='text-sm text-gray-700 leading-relaxed mb-3'>
+                        In this message, {sermon.speaker} explores the theme of{' '}
+                        {primaryTag.toLowerCase()} and how it applies to our
+                        daily walk with God.
+                      </Text>
+                      <Text className='text-sm text-gray-700 leading-relaxed'>
+                        Key takeaways:
+                      </Text>
+                      <View className='mt-2 gap-2'>
+                        {[
+                          "Trust in God's timing and provision",
+                          'Walking by faith, not by sight',
+                          'Building our foundation on Christ',
+                        ].map((t) => (
+                          <View key={t} className='flex-row items-start gap-2'>
+                            <Text className='text-indigo-600 mt-0.5'>•</Text>
+                            <Text className='text-sm text-gray-700 flex-1'>
+                              {t}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -264,20 +321,20 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
                   ) : (
                     related.map((rs) => (
                       <Pressable
-                        key={rs.id}
+                        key={rs._id}
                         onPress={() =>
                           router.push({
-                            pathname: '/media-player/[id]',
+                            pathname: '/sermons/[sermonId]',
                             params: {
-                              id: rs.id,
-                              from: 'sermons/global-sermons',
+                              sermonId: rs._id,
+                              from: from || 'worship',
                             },
                           })
                         }
                         className='flex-row gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-200'
                       >
                         <Image
-                          source={{ uri: rs.thumbnail }}
+                          source={{ uri: rs.thumbnailUrl }}
                           resizeMode='cover'
                           className='w-20 h-20 rounded-2xl'
                         />
@@ -286,7 +343,7 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
                             {rs.title}
                           </Text>
                           <Text className='text-xs text-gray-500'>
-                            {rs.date} • {rs.duration}
+                            {formatDate(rs.date)} • {formatDuration(rs.duration)}
                           </Text>
                         </View>
                       </Pressable>
@@ -309,15 +366,15 @@ export function SermonDetailScreen({ onPlayMedia }: SermonDetailScreenProps) {
               </IconButton>
 
               <Pressable
-                 onPress={() =>
-                          router.push({
-                            pathname: '/media-player/[id]',
-                            params: {
-                              id: sermon.id,
-                              from: 'sermons/global-sermons',
-                            },
-                          })
-                        }
+                onPress={() =>
+                  router.push({
+                    pathname: '/media-player/[id]',
+                    params: {
+                      id: sermon._id,
+                      from: `sermons/${sermon._id}`,
+                    },
+                  })
+                }
                 className='flex-1 h-12 rounded-2xl bg-indigo-600 items-center justify-center flex-row'
               >
                 <Play size={18} color='#ffffff' />

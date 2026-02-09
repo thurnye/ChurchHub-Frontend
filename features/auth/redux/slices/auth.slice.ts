@@ -42,6 +42,10 @@ export const loginUser = createAsyncThunk(
       // Store tokens
       tokenManager.setAccessToken(response.accessToken);
       await tokenManager.setRefreshToken(response.refreshToken);
+      // Store tenant ID for API requests
+      if (response.user?.tenantId) {
+        await tokenManager.saveTenantId(response.user.tenantId);
+      }
       return response.user;
     } catch (error: any) {
       return rejectWithValue(extractErrorMessage(error, 'Login failed'));
@@ -58,6 +62,10 @@ export const signupUser = createAsyncThunk(
       // Store tokens
       tokenManager.setAccessToken(response.accessToken);
       await tokenManager.setRefreshToken(response.refreshToken);
+      // Store tenant ID for API requests
+      if (response.user?.tenantId) {
+        await tokenManager.saveTenantId(response.user.tenantId);
+      }
       return response.user;
     } catch (error: any) {
       return rejectWithValue(extractErrorMessage(error, 'Signup failed'));
@@ -85,7 +93,13 @@ export const fetchCurrentUser = createAsyncThunk(
   'auth/getCurrentUser',
   async (_, { rejectWithValue }) => {
     try {
+      // Load tenant ID from storage first (needed for the API request)
+      await tokenManager.loadTenantId();
       const user = await authRepo.getCurrentUser();
+      // Update tenant ID if present in user data
+      if (user?.tenantId) {
+        await tokenManager.saveTenantId(user.tenantId);
+      }
       return user;
     } catch (error: any) {
       await tokenManager.clear();
