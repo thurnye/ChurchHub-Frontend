@@ -20,11 +20,11 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FeedItem } from '@/data/mockData';
 import { router } from 'expo-router';
+import { IFeedItem } from '../types/home.types';
 
 interface FeedCardProps {
-  item: FeedItem;
+  item: IFeedItem;
   height: number;
   isLiked: boolean;
   isSaved: boolean;

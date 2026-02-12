@@ -7,7 +7,6 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
-  Text,
   RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -15,7 +14,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  type IStory,
   type IFeedItem,
   Stories,
   FeedSourceType,
@@ -27,14 +25,14 @@ import {
   QuickActionsModal,
 } from '../components';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks/app.hooks';
-import { fetchHomeItems, refreshHomeItems } from '../redux/slices/home.slice';
+import { fetchHomeItems, refreshHomeItems, loadMoreHomeItems, clearCache } from '../redux/slices/home.slice';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const STORIES_HEIGHT = 120;
 
 export function HomeScreen() {
   const dispatch = useAppDispatch();
-  const { items: FeedItems, status } = useAppSelector((state) => state.home);
+  const { items: FeedItems, status, loadingMore, hasNext } = useAppSelector((state) => state.home);
   const insets = useSafeAreaInsets();
   const FEED_HEIGHT = SCREEN_HEIGHT; // Full screen height
 
@@ -53,10 +51,20 @@ export function HomeScreen() {
   const [isFocused, setIsFocused] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch home items on mount
+  // Fetch home items on mount - clear cache to ensure fresh data
   useEffect(() => {
+    dispatch(clearCache());
     dispatch(fetchHomeItems());
   }, [dispatch]);
+
+  // Debug: Log items when they change
+  useEffect(() => {
+    const videoItems = FeedItems.filter(item => item.videoUrl);
+    console.log('[HomeScreen] Total items in state:', FeedItems.length, 'Video items:', videoItems.length);
+    if (videoItems.length > 0) {
+      console.log('[HomeScreen] First video item from state:', videoItems[0].id, videoItems[0].kind, videoItems[0].videoUrl);
+    }
+  }, [FeedItems]);
 
   // Handle pull-to-refresh
   const handleRefresh = useCallback(async () => {
@@ -69,6 +77,13 @@ export function HomeScreen() {
       setIsRefreshing(false);
     }
   }, [dispatch]);
+
+  // Handle infinite scroll - load more items
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasNext) {
+      dispatch(loadMoreHomeItems());
+    }
+  }, [dispatch, loadingMore, hasNext]);
 
   // Track screen focus
   useFocusEffect(
@@ -275,6 +290,11 @@ export function HomeScreen() {
 
   const renderFeedItem = useCallback(
     ({ item, index }: { item: IFeedItem; index: number }) => {
+      // Debug: Log each item being rendered
+      if (item.kind === 'video' || item.videoUrl) {
+        console.log('[renderFeedItem] Video item:', index, item.id, 'kind:', item.kind, 'videoUrl:', item.videoUrl);
+      }
+
       const isLiked = likedItems.has(item.id);
       const isSaved = savedItems.has(item.id);
       const isMuted = isGloballyMuted; // Use global mute state for all items
@@ -377,6 +397,15 @@ export function HomeScreen() {
         maxToRenderPerBatch={3}
         windowSize={3}
         initialNumToRender={2}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <View className='h-20 items-center justify-center'>
+              <ActivityIndicator size='small' color='#ffffff' />
+            </View>
+          ) : null
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
