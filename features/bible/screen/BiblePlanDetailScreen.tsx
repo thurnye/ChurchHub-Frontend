@@ -126,7 +126,7 @@ export default function BiblePlanDetailScreen() {
                     router.push({
                       pathname: '/bible/reader',
                       params: {
-                        translationId: 'kjv',
+                        translationId: 'de4e12af7f28f599-02', // KJV
                         bookId: p.bookId,
                         chapter: String(p.chapter),
                         verse: String(p.verseStart),

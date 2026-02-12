@@ -15,12 +15,12 @@ interface BibleState {
   biblesStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   biblesError: string | null;
   selectedBibleId: string;
-  booksByBibleId: Record<string, ApiBibleBook[]>;
-  booksStatus: Record<string, 'idle' | 'loading' | 'succeeded' | 'failed'>;
+  books: ApiBibleBook[];
+  booksStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   booksFilter: string; // 'ALL' or a bookId
   lastFetchedAt: {
     bibles: number;
-    books: Record<string, number>;
+    books: number;
   };
 }
 
@@ -29,12 +29,12 @@ const initialState: BibleState = {
   biblesStatus: 'idle',
   biblesError: null,
   selectedBibleId: '',
-  booksByBibleId: {},
-  booksStatus: {},
+  books: [],
+  booksStatus: 'idle',
   booksFilter: 'ALL',
   lastFetchedAt: {
     bibles: 0,
-    books: {},
+    books: 0,
   },
 };
 
@@ -69,17 +69,15 @@ export const loadBibles = createAsyncThunk(
 
 export const loadBooks = createAsyncThunk(
   'bible/loadBooks',
-  async (bibleId: string) => {
-    const books = await fetchBooksForBible(bibleId);
-    return { bibleId, books };
+  async () => {
+    return await fetchBooksForBible();
   },
   {
-    condition: (bibleId, { getState }) => {
+    condition: (_, { getState }) => {
       const state = (getState() as { bible: BibleState }).bible;
-      const lastFetched = state.lastFetchedAt.books[bibleId] ?? 0;
       return !(
-        state.booksStatus[bibleId] === 'succeeded' &&
-        Date.now() - lastFetched < CACHE_TTL
+        state.booksStatus === 'succeeded' &&
+        Date.now() - state.lastFetchedAt.books < CACHE_TTL
       );
     },
   },
@@ -115,17 +113,16 @@ const bibleSlice = createSlice({
         state.biblesStatus = 'failed';
         state.biblesError = action.error.message ?? 'Failed to load translations.';
       })
-      .addCase(loadBooks.pending, (state, action) => {
-        state.booksStatus[action.meta.arg] = 'loading';
+      .addCase(loadBooks.pending, (state) => {
+        state.booksStatus = 'loading';
       })
       .addCase(loadBooks.fulfilled, (state, action) => {
-        const { bibleId, books } = action.payload;
-        state.booksByBibleId[bibleId] = books;
-        state.booksStatus[bibleId] = 'succeeded';
-        state.lastFetchedAt.books[bibleId] = Date.now();
+        state.books = action.payload;
+        state.booksStatus = 'succeeded';
+        state.lastFetchedAt.books = Date.now();
       })
-      .addCase(loadBooks.rejected, (state, action) => {
-        state.booksStatus[action.meta.arg] = 'failed';
+      .addCase(loadBooks.rejected, (state) => {
+        state.booksStatus = 'failed';
       });
   },
 });

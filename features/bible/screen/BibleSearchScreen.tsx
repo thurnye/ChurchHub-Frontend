@@ -30,7 +30,7 @@ export default function BibleSearchScreen() {
   const { from } = useLocalSearchParams<{
     from: string;
   }>();
-  const { bibles, selectedBibleId, booksByBibleId, booksFilter } = useSelector(
+  const { bibles, selectedBibleId, books, booksFilter } = useSelector(
     (state: RootState) => state.bible,
   );
 
@@ -53,12 +53,10 @@ export default function BibleSearchScreen() {
     dispatch(loadBibles());
   }, [dispatch]);
 
-  // Fetch books whenever selectedBibleId changes
+  // Fetch books on mount
   useEffect(() => {
-    if (selectedBibleId) {
-      dispatch(loadBooks(selectedBibleId));
-    }
-  }, [selectedBibleId, dispatch]);
+    dispatch(loadBooks());
+  }, [dispatch]);
 
   const runSearch = useCallback(async (text: string, bibleId: string) => {
     if (!text.trim() || !bibleId) {
@@ -123,7 +121,6 @@ export default function BibleSearchScreen() {
     ? (selectedBible.abbreviationLocal ?? selectedBible.abbreviation)
     : '';
 
-  const books = booksByBibleId[selectedBibleId] || [];
   const selectedBook =
     booksFilter !== 'ALL' ? books.find((b) => b.id === booksFilter) : null;
   const bookBadge = selectedBook

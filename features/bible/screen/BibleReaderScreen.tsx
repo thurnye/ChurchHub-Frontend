@@ -49,7 +49,8 @@ export default function BibleReaderScreen() {
   const { bibles, selectedBibleId } = useSelector(
     (state: RootState) => state.bible,
   );
-  const translationId = params.translationId ?? (selectedBibleId || 'kjv');
+  // Default to KJV (API.Bible ID)
+  const translationId = params.translationId ?? (selectedBibleId || 'de4e12af7f28f599-02');
   const bookId = params.bookId ?? 'JHN';
   const chapter = Number(params.chapter) || 3;
   const targetVerse = Number(params.verse) || 0;
@@ -124,7 +125,7 @@ export default function BibleReaderScreen() {
 
   // Scroll to target verse after load
   useEffect(() => {
-    if (chapterData && targetVerse > 0 && listRef.current) {
+    if (chapterData?.verses && targetVerse > 0 && listRef.current) {
       const idx = chapterData.verses.findIndex(
         (v) => v.verseStart === targetVerse,
       );
@@ -138,7 +139,7 @@ export default function BibleReaderScreen() {
 
   // Auto-scroll to the verse currently being read
   useEffect(() => {
-    if (readingVerse !== null && chapterData && listRef.current) {
+    if (readingVerse !== null && chapterData?.verses && listRef.current) {
       const idx = chapterData.verses.findIndex(
         (v) => v.verseStart === readingVerse,
       );
@@ -495,7 +496,21 @@ export default function BibleReaderScreen() {
           </View>
         )}
 
-        {!loading && !error && chapterData && (
+        {!loading && !error && chapterData && chapterData.verses?.length === 0 && (
+          <View className='flex-1 items-center justify-center px-6'>
+            <Text className='text-sm text-gray-500 text-center mb-4'>
+              No verses found for this chapter. The content may not be available for this translation.
+            </Text>
+            <Pressable
+              onPress={fetchChapter}
+              className='bg-indigo-600 px-5 py-2.5 rounded-xl'
+            >
+              <Text className='text-sm font-semibold text-white'>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {!loading && !error && chapterData?.verses && chapterData.verses.length > 0 && (
           <FlatList
             ref={listRef}
             data={chapterData.verses}

@@ -1,17 +1,11 @@
-import Constants from 'expo-constants';
+import { DATA_SOURCE } from '@/shared/utils/dataSource';
 import {
   bibleTranslations,
   bibleBooks,
   type IBibleTranslation,
   type IBibleBook,
 } from '@/data/mockData';
-
-// ─── Config (resolved from .env at build time via app.config.js) ────────────
-
-const API_KEY = Constants.expoConfig?.extra?.apiBibleKey as string;
-const BASE_URL =
-  (Constants.expoConfig?.extra?.bibleApiEndpoint as string) ??
-  'https://rest.api.bible';
+import * as bibleApi from './bible.api.service';
 
 // ─── Public types (consumed by screens) ────────────────────────────────────
 
@@ -38,15 +32,13 @@ export interface BibleSearchResult {
   text: string;
 }
 
-// ─── Internal API.Bible response shapes ─────────────────────────────────────
-
 export interface ApiBible {
   id: string;
   name: string;
   abbreviation: string;
   abbreviationLocal?: string;
   description?: string;
-  nameLocal?:string;
+  nameLocal?: string;
   language?: { name: string; direction: string };
 }
 
@@ -60,81 +52,18 @@ export interface ApiBibleBook {
   order?: number;
 }
 
-interface ApiVerse {
-  id: string; // 'GEN.1.1'
-  bookId: string; // 'GEN'
-  chapterId: string; // 'GEN.1'
-  verseStart?: number;
-  verseEnd?: number;
-  reference?: string; // 'Genesis 1:1'
-  text?: string;
-}
+// ─── Cache ─────────────────────────────────────────────────────────────────
 
-// ─── Cache & translation mapping ────────────────────────────────────────────
-
-// Chapters: translationId|bookId|chapter → parsed data
 const chapterCache = new Map<string, BibleChapterData>();
-
-// One-time mapping: our internal translation ID ('kjv') → API.Bible bibleId ('kjv1769')
-const translationIdMap = new Map<string, string>();
-let translationsLoaded = false;
 
 function chapterCacheKey(translationId: string, bookId: string, chapter: number) {
   return `${translationId}|${bookId}|${chapter}`;
 }
 
-// ─── HTTP helper ────────────────────────────────────────────────────────────
+// ─── Helper ────────────────────────────────────────────────────────────────
 
-async function apiFetch<T>(path: string): Promise<T> {
-  let response: Response;
-
-  try {
-    response = await fetch(`${BASE_URL}${path}`, {
-      headers: { 'api-key': API_KEY },
-    });
-  } catch {
-    throw new Error('Unable to connect. Check your internet connection.');
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('Bible API key is invalid or missing permissions.');
-  }
-
-  if (response.status === 429) {
-    throw new Error('Rate limit reached. Please try again shortly.');
-  }
-
-  if (!response.ok) {
-    throw new Error(`Bible API error ${response.status}`);
-  }
-
-  return response.json() as Promise<T>;
-}
-
-// ─── Translation mapping ────────────────────────────────────────────────────
-// Fetches the API.Bible translation list once and builds a map from our
-// internal abbreviation-based IDs ('kjv') to API.Bible's bibleId ('kjv1769').
-
-async function ensureTranslationsLoaded(): Promise<void> {
-  if (translationsLoaded) return;
-
-  const json = await apiFetch<{ data: ApiBible[] }>('/v1/bibles?language=eng');
-
-  for (const local of bibleTranslations) {
-    const match = (json.data || []).find((t) => {
-      const abbr = (t.abbreviationLocal ?? t.abbreviation).toLowerCase();
-      return abbr === local.abbreviation.toLowerCase();
-    });
-    if (match) {
-      translationIdMap.set(local.id, match.id);
-    }
-  }
-
-  translationsLoaded = true;
-}
-
-function bibleId(translationId: string): string {
-  return translationIdMap.get(translationId) ?? translationId;
+function delay<T>(value: T, ms = 200): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -159,31 +88,6 @@ export function getCachedChapter(
   return chapterCache.get(chapterCacheKey(translationId, bookId, chapter));
 }
 
-function parseChapterContent(
-  content: string,
-  bookId: string,
-  chapter: number,
-  translationId: string,
-): BibleChapterData {
-  const verses: BibleVerse[] = [];
-  const pattern =
-    /<span[^>]*class="v"[^>]*>\s*(\d+)\s*<\/span>([\s\S]*?)(?=<span[^>]*class="v"|$)/g;
-  let match;
-  while ((match = pattern.exec(content)) !== null) {
-    const verseNum = Number(match[1]);
-    const text = match[2].replace(/<[^>]+>/g, '').trim();
-    if (text) {
-      verses.push({
-        verseId: `${bookId}.${chapter}.${verseNum}`,
-        verseStart: verseNum,
-        verseEnd: verseNum,
-        text,
-      });
-    }
-  }
-  return { translationId, bookId, chapter, verses };
-}
-
 export async function getChapter(
   translationId: string,
   bookId: string,
@@ -191,18 +95,42 @@ export async function getChapter(
 ): Promise<BibleChapterData> {
   const key = chapterCacheKey(translationId, bookId, chapter);
   const cached = chapterCache.get(key);
-  if (cached) return cached;
+  if (cached) {
+    console.log('[getChapter] Cache hit:', key);
+    return cached;
+  }
 
-  await ensureTranslationsLoaded();
+  console.log('[getChapter] Cache miss, fetching:', { translationId, bookId, chapter });
 
-  const chapterId = `${bookId}.${chapter}`;
-  const json = await apiFetch<{ data: { content: string } }>(
-    `/v1/bibles/${bibleId(translationId)}/chapters/${chapterId}`,
-  );
+  if (DATA_SOURCE === 'api') {
+    // Call backend API
+    const data = await bibleApi.fetchChapter(bookId, chapter, translationId);
 
-  const data = parseChapterContent(json.data?.content || '', bookId, chapter, translationId);
-  chapterCache.set(key, data);
-  return data;
+    // Ensure verses is always an array
+    if (!Array.isArray(data.verses)) {
+      console.warn('[getChapter] Invalid verses in response, defaulting to empty array');
+      data.verses = [];
+    }
+
+    console.log('[getChapter] API returned:', data.verses.length, 'verses');
+    chapterCache.set(key, data);
+    return data;
+  }
+
+  // Mock data fallback
+  const mockData: BibleChapterData = {
+    translationId,
+    bookId,
+    chapter,
+    verses: [
+      { verseId: `${bookId}.${chapter}.1`, verseStart: 1, verseEnd: 1, text: 'In the beginning God created the heaven and the earth.' },
+      { verseId: `${bookId}.${chapter}.2`, verseStart: 2, verseEnd: 2, text: 'And the earth was without form, and void; and darkness was upon the face of the deep.' },
+      { verseId: `${bookId}.${chapter}.3`, verseStart: 3, verseEnd: 3, text: 'And the Spirit of God moved upon the face of the waters.' },
+    ],
+  };
+
+  chapterCache.set(key, mockData);
+  return delay(mockData);
 }
 
 function parseReference(
@@ -218,7 +146,6 @@ function parseReference(
   const verseStart = match[3] ? Number(match[3]) : 0;
   const verseEnd = match[4] ? Number(match[4]) : verseStart;
 
-  // Exact match first, then shortest prefix match (avoids ambiguity)
   const exact = bibleBooks.find((b) => b.name.toLowerCase() === bookQuery);
   const book =
     exact ??
@@ -233,7 +160,7 @@ function parseReference(
 
 export async function searchPassage(
   query: string,
-  translationId = 'kjv',
+  translationId = 'de4e12af7f28f599-02',
 ): Promise<BibleSearchResult[]> {
   if (!query.trim()) return [];
 
@@ -258,45 +185,70 @@ export async function searchPassage(
     }));
   }
 
-  // Fall back to keyword search via API
-  await ensureTranslationsLoaded();
-
-  let json: { data: { verses?: ApiVerse[] } };
-  try {
-    json = await apiFetch<{ data: { verses?: ApiVerse[] } }>(
-      `/v1/bibles/${bibleId(translationId)}/search?query=${encodeURIComponent(query.trim())}&limit=20`,
-    );
-  } catch (err: any) {
-    // 404 means no verses matched the query — not a failure
-    if (err.message?.includes('404')) return [];
-    throw err;
+  // Fall back to keyword search via backend API
+  if (DATA_SOURCE === 'api') {
+    return bibleApi.searchVerses(query, translationId, 20);
   }
 
-  return (json.data?.verses || []).map((v) => {
-    const idParts = v.id.split('.');
-    return {
+  // Mock search fallback
+  return delay([
+    {
       translationId,
-      bookId: idParts[0] || v.bookId || '',
-      bookName: v.reference || '',
-      chapter: Number(idParts[1]) || 0,
-      verse: Number(idParts[2]) || 0,
-      text: (v.text ?? '').trim(),
-    };
-  });
+      bookId: 'JHN',
+      bookName: 'John 3:16',
+      chapter: 3,
+      verse: 16,
+      text: 'For God so loved the world, that he gave his only begotten Son...',
+    },
+  ]);
 }
 
 export async function fetchEnglishBibles(): Promise<ApiBible[]> {
-  const json = await apiFetch<{ data: ApiBible[] }>('/v1/bibles?language=eng');
-  return json.data || [];
+  if (DATA_SOURCE === 'api') {
+    const translations = await bibleApi.fetchTranslations();
+    return translations.map((t) => ({
+      id: t.id,
+      name: t.name,
+      abbreviation: t.abbreviation,
+      abbreviationLocal: t.abbreviationLocal,
+      description: t.description,
+      nameLocal: t.nameLocal,
+      language: t.language,
+    }));
+  }
+
+  // Mock fallback
+  return delay(
+    bibleTranslations.map((t) => ({
+      id: t.id,
+      name: t.name,
+      abbreviation: t.abbreviation,
+    })),
+  );
 }
 
-export async function fetchBooksForBible(bibleId: string): Promise<ApiBibleBook[]> {
-  const json = await apiFetch<{ data: ApiBibleBook[] }>(`/v1/bibles/${bibleId}/books`);
-  return json.data || [];
+export async function fetchBooksForBible(): Promise<ApiBibleBook[]> {
+  if (DATA_SOURCE === 'api') {
+    const books = await bibleApi.fetchBooks();
+    return books.map((b) => ({
+      id: b.id,
+      name: b.name,
+      nameLocal: b.nameLocal,
+      abbreviation: b.abbreviation,
+      order: b.order,
+    }));
+  }
+
+  // Mock fallback
+  return delay(
+    bibleBooks.map((b) => ({
+      id: b.id,
+      name: b.name,
+      abbreviation: b.name.substring(0, 3).toUpperCase(),
+    })),
+  );
 }
 
 export function clearCache(): void {
   chapterCache.clear();
-  translationIdMap.clear();
-  translationsLoaded = false;
 }
